@@ -1,7 +1,9 @@
 import json
 
+# Mengimport modul widget, layout, model dan plotting pada bokeh
 from bokeh.models import (ColumnDataSource, CategoricalColorMapper, Panel,
                           GeoJSONDataSource, ColorBar, TableColumn, HoverTool, Slider)
+
 
 from bokeh.plotting import figure, curdoc
 from bokeh.models.widgets import Button, DataTable
@@ -9,7 +11,7 @@ from bokeh.layouts import row, WidgetBox
 
 
 def maps_covid(covid19, indonesia):
-    # Mengkategorikan Ukuran Jumlah Kasus Baru COVID-19
+    # Mengkategorikan Jumlah Kasus COVID-19 untuk acuan heatmap wilayah
     def category_covid(df):
         if df == 0:
             category = '0'
@@ -19,62 +21,65 @@ def maps_covid(covid19, indonesia):
             category = '20 - 99'
         elif 100 <= df <= 999:
             category = '100 - 999'
-        elif 1000 <= df <= 2999:
-            category = '1000 - 2999'
-        elif 3000 <= df <= 9999:
-            category = '3000 - 9999'
-        elif 10000 <= df <= 99999:
-            category = '10000 - 29999'
-        elif 30000 <= df <= 99999:
-            category = '30000 - 99999'
+        elif 1000 <= df <= 3999:
+            category = '1000 - 3999'
+        elif 4000 <= df <= 6999:
+            category = '4000 - 6999'
+        elif 7000 <= df <= 9999:
+            category = '7000 - 9999'
+        elif 10000 <= df <= 999999:
+            category = '10000 - 999999'
 
         return category
 
+    # Menghitung jumlah hari sejak tanggal awal pada dataset
     def map_date():
         date_to_day = {}
-        date = sorted(covid19['tanggal'].unique())
+        date = covid19['tanggal'].unique()
 
         for j, val in enumerate(date):
             date_to_day[val] = j + 1
 
         return date_to_day
 
+    # Merubah format dataset menjadi json untuk visualisasi geospasial
     def json_data(selected_day):
-        sd = selected_day
+        # Seleksi data berdasarkan hari yang dipilih
+        df_dt = covid19.loc[covid19['day'] == selected_day]
+        df_dt = df_dt.fillna(0)
 
-        # Pull selected year
-        df_dt = covid19.loc[covid19['day'] == sd]
-
-        # Merge the GeoDataframe object (sf) with the covid19 data
+        # Merge dataset GeoDataframe object dengan data covid19
         merge = indonesia.merge(df_dt, how='left', left_on=['PROVINSI'], right_on=['PROVINSI'])
         merge['PROVINSI'] = merge['PROVINSI'].str.title()
 
-        # remove columns
-        merge.dropna(inplace=True)
-
-        # Bokeh uses geojson formatting, representing geographical   features, with json
-        # Convert to json
+        # Convert dataset ke tipe json
         merge_json = json.loads(merge.to_json())
 
-        # Convert to json preferred string-like object
-        json_data = json.dumps(merge_json)
-        return json_data
+        # Convert dataset json ke tipe object
+        json_data_new = json.dumps(merge_json)
 
+        return json_data_new
+
+    # Fungsi untuk membuat ranking kasus covid dan dataset pada tabel
     def column_data(selected_day):
-        cd = selected_day
+        # Seleksi data berdasarkan hari yang dipilih
+        column = covid19.loc[covid19['day'] == selected_day]
 
-        column = covid19.loc[covid19['day'] == cd]
+        # Melakukan sorting rangking berdasarkan kasus tiap provinsi
         column = column.sort_values(by='KASUS', ascending=False)
 
+        # Melakukan perhitungan untuk index rangking setiap provinsi
         rank = []
         for counter in range(column.index.shape[0]):
             rank.append(counter + 1)
 
         column['rank'] = rank
 
+        # Mengambil 20 Data Teratas
         most_confirmed = column.head(20)
         most_confirmed['PROVINSI'] = most_confirmed['PROVINSI'].str.title()
 
+        # Membuat source dataset baru untuk tabel ranking kasus
         new_source = dict(
             rank=[rank for rank in most_confirmed['rank']],
             provinsi=[country for country in most_confirmed['PROVINSI']],
@@ -84,12 +89,14 @@ def maps_covid(covid19, indonesia):
 
         return new_source
 
+    # Mengupdate plot ketika widget digunakan oleh user
     def update_plot(attr, old, new):
         day = slider.value
         new_data = json_data(day)
         geosource.geojson = new_data
         source.data = column_data(day)
 
+    # Mengupdate value perhitungan tanggal
     def animate_update():
         val = slider.value + 1
         if val > 365:
@@ -97,8 +104,10 @@ def maps_covid(covid19, indonesia):
 
         slider.value = val
 
+    # Kontrol animasi pada plot dan tabel
     def animate():
         global callback_id
+
         if button.label == '► Play':
             button.label = '❚❚ Pause'
             callback_id = curdoc().add_periodic_callback(animate_update, 200)
@@ -135,9 +144,10 @@ def maps_covid(covid19, indonesia):
     # Membuat data informasi kasus COVID-19 awal untuk tabel
     source = ColumnDataSource(column_data(1))
 
+    # Membuat list yang berisi warna untuk heatmap
     list_category = [
-        '0', '1 - 19', '20 - 99', '100 - 999', '1000 - 2999',
-        '3000 - 9999', '10000 - 29999', '30000 - 99999'
+        '0', '1 - 19', '20 - 99', '100 - 999', '1000 - 3999',
+        '4000 - 6999', '7000 - 9999', '10000 - 99999'
     ]
 
     # Membuat list yang berisi warna untuk heatmap
@@ -147,7 +157,7 @@ def maps_covid(covid19, indonesia):
     # Menggunakan kategorikal color mapper sebagai pewarnaan heatmap tiap provinsi
     color_mapper = CategoricalColorMapper(factors=list_category, palette=palet)
 
-    # Menampilkan legend categorical mapper
+    # Menampilkan legend untuk categorical mapper
     color_bar = ColorBar(
         color_mapper=color_mapper,
         title_text_font_style='bold',
@@ -158,20 +168,21 @@ def maps_covid(covid19, indonesia):
         major_label_text_font_style='bold',
     )
 
-    # Make a slider object: slider
+    # Membuat tampilan untuk slider
     slider = Slider(title='Hari Ke', start=1, end=365, step=1, value=1)
+
+    # Mengganti value pada DataSource ketika pengguna menggunakan slider
     slider.on_change('value', update_plot)
 
-    # Create figure object.
-    r = figure(title="", plot_height=500, plot_width=1200, toolbar_location='below', tools=['pan, wheel_zoom, reset'])
-
+    # Inisialisasi objek figure untuk dan melakukan styling pada visualisasi plot
+    r = figure(title="", plot_height=500, plot_width=1000, toolbar_location='below', tools=['pan, wheel_zoom, reset'])
     r.title.align = 'center'
     r.xaxis.visible = False
     r.yaxis.visible = False
     r.xgrid.grid_line_color = None
     r.ygrid.grid_line_color = None
 
-    # Add patch renderer to figure.
+    # Menambahkan potongan setiap wilayah indonesia kedalam plot
     states = r.patches(
         'xs', 'ys', source=geosource,
         fill_color={'field': 'category', 'transform': color_mapper},
@@ -180,7 +191,10 @@ def maps_covid(covid19, indonesia):
         fill_alpha=1,
     )
 
-    # membuat hover
+    # Menambahkan layout untuk legend heatmap
+    r.add_layout(color_bar)
+
+    # Membuat hover pada visualisasi plot geospasial
     r.add_tools(HoverTool(
         renderers=[states],
         tooltips=[
@@ -192,25 +206,26 @@ def maps_covid(covid19, indonesia):
         ]
     ))
 
-    # membuat tombol animasi
+    # Membuat tombol animasi
     callback_id = None
     button = Button(label='► Play', width=60)
     button.on_click(animate)
 
-    # membuat tabel
+    # Membuat column untuk tabel rangking kasus
     columns = [
-        TableColumn(field='rank', title='No.'),
+        TableColumn(field='rank', title='Peringkat Kasus'),
         TableColumn(field='provinsi', title='Provinsi'),
         TableColumn(field='confirmed', title='Terkonfirmasi'),
     ]
 
+    # Membuat plot untuk tabel
     tabel = DataTable(
-        source=source, columns=columns, width=300,
+        source=source, columns=columns, width=500,
         height=600, index_position=None
     )
 
-    # Make a column layout of widgetbox(slider) and plot, and add it to the current document
-    r.add_layout(color_bar)
-
+    # Membuat layout untuk setiap widget dan plot yang telah dibuat
     layout = row(WidgetBox(slider, tabel, button), r)
-    return Panel(child=layout, title='Peta Kasus Harian COVID-19 Indonesia')
+    tab = Panel(child=layout, title='Peta Kasus Harian COVID-19 Indonesia')
+
+    return tab

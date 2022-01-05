@@ -12,7 +12,6 @@ from bokeh.models.widgets import Tabs
 
 # Mengimport tab yang telah dibuat
 from scripts.lineplot import lineplot_visualization
-from scripts.pie import pie_visualization
 from scripts.maps import maps_covid
 
 # Membaca dataset COVID-19 untuk setiap wilayah Indonesia
@@ -22,12 +21,11 @@ covid19 = pd.read_csv(join(dirname(__file__), 'data', 'prov_case.csv'))
 indonesia = gpd.read_file(join(dirname(__file__), 'data/geoindo', 'Batas Provinsi.shp'))
 
 # Membuat tab untuk setiap menu visualisasi
-# tab1 = pie_visualization(covid19)
-tab2 = lineplot_visualization(covid19)
-tab3 = maps_covid(covid19, indonesia)
+tab1 = lineplot_visualization(covid19)
+tab2 = maps_covid(covid19, indonesia)
 
 # Menggabungkan seluruh navigasi kedalam tab navigasi
-tabs = Tabs(tabs=[tab2, tab3])
+tabs = Tabs(tabs=[tab1, tab2])
 
 # Menampilkan seluruh tab pada dokumen utama situs
 curdoc().add_root(tabs)
